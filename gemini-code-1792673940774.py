@@ -25,9 +25,14 @@ with col1:
 with col2:
     st.subheader("2. תוצאות הצלבה")
     
-    # ניקוי ועיבוד הרשימות
-    cart_list = [line.strip() for line in cart_meters_text.splitlines() if line.strip()]
-    checked_list = [line.strip() for line in checked_meters_text.splitlines() if line.strip()]
+    # פונקציית ניקוי: הסרת רווחים והסרת אפסים מובילים
+    def clean_meter(val):
+        cleaned = val.strip()
+        return cleaned.lstrip('0') if cleaned else ''
+
+    # עיבוד וניקוי הרשימות
+    cart_list = [clean_meter(line) for line in cart_meters_text.splitlines() if clean_meter(line)]
+    checked_list = [clean_meter(line) for line in checked_meters_text.splitlines() if clean_meter(line)]
     
     set_cart = set(cart_list)
     set_checked = set(checked_list)
