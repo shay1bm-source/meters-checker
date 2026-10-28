@@ -7,9 +7,9 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("סריקת אקדח ברקוד בעגלה, וטעינת מספר קבצי XML יחד (מעל 10 קבצים) לבדיקת הדיוק.")
+st.write("סריקת אקדח ברקוד בעגלה, וטעינת קבצי XML מרובים עם מעקב כפילויות מדויק לפי קבצים.")
 
-# פונקציה חכמה לחילוץ מונים מקובץ XML בודד
+# פונקציה לחילוץ מונים מקובץ XML בודד
 def extract_meters_from_xml(uploaded_file):
     try:
         tree = ET.parse(uploaded_file)
@@ -24,7 +24,7 @@ def extract_meters_from_xml(uploaded_file):
                 if len(cleaned_val) == 12 and cleaned_val.startswith('050'):
                     extracted.append(cleaned_val)
                     
-        return list(set(extracted))
+        return extracted
     except Exception as e:
         st.error(f"שגיאה בקריאת הקובץ: {e}")
         return []
@@ -42,25 +42,33 @@ with col1:
 
 with col2:
     st.subheader("🔍 בדיקת דיוק")
-    # הוספת accept_multiple_files=True כדי לאפשר העלאת עשרות קבצים יחד
     uploaded_xmls = st.file_uploader(
         "טען קבצי XML לבדיקת דיוק (בחר את כולם יחד):", 
         type=["xml"], 
         accept_multiple_files=True
     )
     
-    xml_meters = []
+    # מילון למעקב: איזה מונה מופיע באילו קבצים
+    meter_to_files = {}
+    all_extracted_meters = []
+
     if uploaded_xmls:
         for uploaded_file in uploaded_xmls:
+            file_name = uploaded_file.name
             meters_from_file = extract_meters_from_xml(uploaded_file)
-            xml_meters.extend(meters_from_file)
+            for m in meters_from_file:
+                all_extracted_meters.append(m)
+                if m not in meter_to_files:
+                    meter_to_files[m] = []
+                if file_name not in meter_to_files[m]:
+                    meter_to_files[m].append(file_name)
         
-        # הסרת כפילויות במקרה שמונים מופיעים ביותר מקובץ אחד
-        xml_meters = list(set(xml_meters))
-        if xml_meters:
-            st.success(f"נטענו בהצלחה {len(xml_meters)} מונים מתוך {len(uploaded_xmls)} קבצים!")
+        if all_extracted_meters:
+            st.success(ف`נטענו בהצלחה {len(all_extracted_meters)} מופעים מתוך {len(uploaded_xmls)} קבצים!`)
     
-    accuracy_text_default = "\n".join(xml_meters) if xml_meters else ""
+    # רשימה ייחודית לבדיקת הדיוק (כדי למנוע שגיאות השוואה)
+    xml_meters_unique = sorted(list(meter_to_files.keys()))
+    accuracy_text_default = "\n".join(xml_meters_unique) if xml_meters_unique else ""
     
     accuracy_meters_text = st.text_area(
         "ברקודים מבדיקת הדיוק (או הדבק ידנית):", 
@@ -103,7 +111,7 @@ m2.metric("בבדיקת דיוק", len(set_accuracy))
 m3.metric("חסרים בדיוק", len(missing_in_accuracy))
 m4.metric("חסרים בפונקציונלית", len(missing_in_functional))
 
-tab1, tab2 = st.tabs(["❌ מונים חסרים", "📊 דוח מלא להורדה"])
+tab1, tab2, tab3 = st.tabs(["❌ מונים חסרים", "🔍 איתור כפילויות בין קבצים", "📊 דוח מלא להורדה"])
 
 with tab1:
     col_a, col_b = st.columns(2)
@@ -124,6 +132,27 @@ with tab1:
             st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
+    st.subheader("🔍 מונים שמופיעים ביותר מקובץ אחד (כפילויות)")
+    if meter_to_files:
+        duplicates_data = []
+        for m, files in meter_to_files.items():
+            if len(files) > 1 or all_extracted_meters.count(m) > 1:
+                duplicates_data.append({
+                    "מספר מונה": m,
+                    "כמות הופעות": all_extracted_meters.count(m),
+                    "שמות הקבצים בהם מופיע": ", ".join(files)
+                })
+        
+        if duplicates_data:
+            df_dup = pd.DataFrame(duplicates_data)
+            st.warning(f נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
+            st.dataframe(df_dup, use_container_width=True)
+        else:
+            st.success("אין כפילויות! כל מונה מופיע בקובץ אחד בלבד.")
+    else:
+        st.info("טען קבצי XML כדי לראות ניתוח כפילויות.")
+
+with tab3:
     st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
     if set_cart:
         all_unique = sorted(list(set_cart | set_accuracy | set_functional))
