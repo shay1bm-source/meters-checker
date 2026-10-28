@@ -64,9 +64,9 @@ with col2:
                     meter_to_files[m].append(file_name)
         
         if all_extracted_meters:
-            st.success(ف`נטענו בהצלחה {len(all_extracted_meters)} מופעים מתוך {len(uploaded_xmls)} קבצים!`)
+            st.success(f"נטענו בהצלחה {len(all_extracted_meters)} מופעים מתוך {len(uploaded_xmls)} קבצים!")
     
-    # רשימה ייחודית לבדיקת הדיוק (כדי למנוע שגיאות השוואה)
+    # רשימה ייחודית לבדיקת הדיוק
     xml_meters_unique = sorted(list(meter_to_files.keys()))
     accuracy_text_default = "\n".join(xml_meters_unique) if xml_meters_unique else ""
     
@@ -145,7 +145,7 @@ with tab2:
         
         if duplicates_data:
             df_dup = pd.DataFrame(duplicates_data)
-            st.warning(f נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
+            st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
             st.dataframe(df_dup, use_container_width=True)
         else:
             st.success("אין כפילויות! כל מונה מופיע בקובץ אחד בלבד.")
@@ -157,25 +157,3 @@ with tab3:
     if set_cart:
         all_unique = sorted(list(set_cart | set_accuracy | set_functional))
         report_data = []
-        for m in all_unique:
-            report_data.append({
-                "ברקוד / מונה": m,
-                "נמצא בעגלה": "כן" if m in set_cart else "לא",
-                "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
-                "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא"
-            })
-        df_report = pd.DataFrame(report_data)
-        st.dataframe(df_report, use_container_width=True)
-
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
-        
-        st.download_button(
-            label="📥 הורד דוח מלא לאקסל (Excel)",
-            data=buffer.getvalue(),
-            file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
