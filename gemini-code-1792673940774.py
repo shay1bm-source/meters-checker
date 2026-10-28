@@ -7,9 +7,9 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("סריקת אקדח ברקוד בעגלה, וטעינת קובץ XML אוטומטית לבדיקת הדיוק (עם סינון מדויק של מונים בלבד).")
+st.write("סריקת אקדח ברקוד בעגלה, וטעינת מספר קבצי XML יחד (מעל 10 קבצים) לבדיקת הדיוק.")
 
-# פונקציה חכמה ומדויקת לחילוץ מונים מקובץ ה-XML (רק מונים שמתחילים ב-050 ובאורך 12 ספרות)
+# פונקציה חכמה לחילוץ מונים מקובץ XML בודד
 def extract_meters_from_xml(uploaded_file):
     try:
         tree = ET.parse(uploaded_file)
@@ -26,10 +26,10 @@ def extract_meters_from_xml(uploaded_file):
                     
         return list(set(extracted))
     except Exception as e:
-        st.error(f"שגיאה בקריאת קובץ ה-XML: {e}")
+        st.error(f"שגיאה בקריאת הקובץ: {e}")
         return []
 
-# חלוקה ל-3 עמודות כמבוקש
+# חלוקה ל-3 עמודות
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -42,13 +42,23 @@ with col1:
 
 with col2:
     st.subheader("🔍 בדיקת דיוק")
-    uploaded_xml = st.file_uploader("טען קובץ XML לבדיקת דיוק:", type=["xml"])
+    # הוספת accept_multiple_files=True כדי לאפשר העלאת עשרות קבצים יחד
+    uploaded_xmls = st.file_uploader(
+        "טען קבצי XML לבדיקת דיוק (בחר את כולם יחד):", 
+        type=["xml"], 
+        accept_multiple_files=True
+    )
     
     xml_meters = []
-    if uploaded_xml is not None:
-        xml_meters = extract_meters_from_xml(uploaded_xml)
+    if uploaded_xmls:
+        for uploaded_file in uploaded_xmls:
+            meters_from_file = extract_meters_from_xml(uploaded_file)
+            xml_meters.extend(meters_from_file)
+        
+        # הסרת כפילויות במקרה שמונים מופיעים ביותר מקובץ אחד
+        xml_meters = list(set(xml_meters))
         if xml_meters:
-            st.success(f"נטענו {len(xml_meters)} מונים אמיתיים מקובץ ה-XML!")
+            st.success(f"נטענו בהצלחה {len(xml_meters)} מונים מתוך {len(uploaded_xmls)} קבצים!")
     
     accuracy_text_default = "\n".join(xml_meters) if xml_meters else ""
     
@@ -69,7 +79,7 @@ with col3:
 
 st.divider()
 
-# פונקציית ניקוי אחידה להשוואה מדויקת (הסרת רווחים ואפסים מובילים)
+# פונקציית ניקוי אחידה להשוואה מדויקת
 def clean_meter(val):
     cleaned = val.strip()
     return cleaned.lstrip('0') if cleaned else ''
@@ -111,7 +121,7 @@ with tab1:
             df_func = pd.DataFrame({"ברקוד חסר פונקציונלית": missing_in_functional})
             st.dataframe(df_func, use_container_width=True)
         else:
-            st.success("הכל קיים בבדיקה הפונקציונלית!")
+            st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
     st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
