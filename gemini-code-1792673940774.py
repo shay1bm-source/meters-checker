@@ -6,27 +6,25 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("ניהול עגלה (כולל טעינת קובץ XML), הצלבה מול בדיקת דיוק ובדיקה פונקציונלית.")
+st.write("ניהול עגלה (כולל קריאת קובץ XML), הצלבה מול בדיקת דיוק ובדיקה פונקציונלית.")
 
-# פונקציה לחילוץ מונים מקובץ XML
+# פונקציה לחילוץ מונים אוטומטי מקובץ XML
 def extract_meters_from_xml(uploaded_file):
     try:
         tree = ET.parse(uploaded_file)
         root = tree.getroot()
-        # מחפש כל ערך טקסטריות או תגים נפוצים ב-XML שיכולים להכיל מונים/ברקודים
         extracted = []
         for elem in root.iter():
             if elem.text and elem.text.strip():
                 val = elem.text.strip()
-                # סינון בסיסי למספרים/ברקודים (למשל באורך הגיוני)
-                if len(val) >= 5:
+                if len(val) >= 4:  # סינון בסיסי לאורך אופייני של ברקוד/מונה
                     extracted.append(val)
         return list(set(extracted))
     except Exception as e:
         st.error(f"שגיאה בקריאת קובץ ה-XML: {e}")
         return []
 
-# חלוקה ל-3 עמודות כמבוקש
+# חלוקה ל-3 עמודות בדיוק כמו בבקשה
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -37,7 +35,7 @@ with col1:
     if uploaded_xml is not None:
         xml_meters = extract_meters_from_xml(uploaded_xml)
         if xml_meters:
-            st.success(ف`נטענו {len(xml_meters)} מונים מקובץ ה-XML!`)
+            st.success(f"נטענו {len(xml_meters)} מונים מקובץ ה-XML!")
     
     cart_text_default = "\n".join(xml_meters) if xml_meters else ""
     
@@ -66,15 +64,19 @@ with col3:
 
 st.divider()
 
-# עיבוד וניקוי נתונים
-def clean_list(text_data):
-    return {line.strip() for line in text_data.splitlines() if line.strip()}
+# פונקציית ניקוי אחידה (הסרת רווחים ואפסים מובילים להשוואה מדויקת)
+def clean_meter(val):
+    cleaned = val.strip()
+    return cleaned.lstrip('0') if cleaned else ''
 
-set_cart = clean_list(cart_meters_text)
-set_accuracy = clean_list(accuracy_meters_text)
-set_functional = clean_list(functional_meters_text)
+def process_text_to_set(text_data):
+    return {clean_meter(line) for line in text_data.splitlines() if clean_meter(line)}
 
-# הצלבות
+set_cart = process_text_to_set(cart_meters_text)
+set_accuracy = process_text_to_set(accuracy_meters_text)
+set_functional = process_text_to_set(functional_meters_text)
+
+# הצלבות (אילו מונים בעגלה חסרים בבדיקות)
 missing_in_accuracy = sorted(list(set_cart - set_accuracy))
 missing_in_functional = sorted(list(set_cart - set_functional))
 
@@ -104,12 +106,11 @@ with tab1:
             df_func = pd.DataFrame({"ברקוד חסר פונקציונלית": missing_in_functional})
             st.dataframe(df_func, use_container_width=True)
         else:
-            st.success("הכל קיים בדיקה הפונקציונלית!")
+            st.success("הכל קיים בבדיקה הפונקציונלית!")
 
 with tab2:
     st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
     if set_cart:
-        # יצירת טבלת השוואה מרוכזת
         all_unique = sorted(list(set_cart | set_accuracy | set_functional))
         report_data = []
         for m in all_unique:
