@@ -7,9 +7,9 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("סריקת אקדח ברקוד בעגלה, וטעינת קובץ XML אוטומטית לבדיקת הדיוק.")
+st.write("סריקת אקדח ברקוד בעגלה, וטעינת קובץ XML אוטומטית לבדיקת הדיוק עם סינון חכם של מונים אמיתיים בלבד.")
 
-# פונקציה חכמה לחילוץ מונים מקובץ ה-XML (רק מספרי מונים נקיים)
+# פונקציה חכמה לחילוץ מונים מקובץ ה-XML (כולל סינון מספרים שאינם מונים אמיתיים)
 def extract_meters_from_xml(uploaded_file):
     try:
         tree = ET.parse(uploaded_file)
@@ -19,8 +19,11 @@ def extract_meters_from_xml(uploaded_file):
             if elem.text and elem.text.strip():
                 val = elem.text.strip()
                 cleaned_val = re.sub(r'\D', '', val) # משאיר רק ספרות
-                # מונה תקין באורך בין 10 ל-12 ספרות
-                if 10 <= len(cleaned_val) <= 12:
+                
+                # תנאים לסינון מדויק של מונה אמיתי:
+                # 1. אורך בין 10 ל-14 ספרות.
+                # 2. חייב להתחיל ב-0 או ב-5 (מסנן החוצה מספרים רצים כמו 12345678910).
+                if 10 <= len(cleaned_val) <= 14 and cleaned_val.startswith(('0', '5')):
                     extracted.append(cleaned_val)
                     
         return list(set(extracted))
@@ -47,7 +50,7 @@ with col2:
     if uploaded_xml is not None:
         xml_meters = extract_meters_from_xml(uploaded_xml)
         if xml_meters:
-            st.success(f"נטענו {len(xml_meters)} מונים מקובץ ה-XML!")
+            st.success(f"נטענו {len(xml_meters)} מונים אמיתיים מקובץ ה-XML!")
     
     accuracy_text_default = "\n".join(xml_meters) if xml_meters else ""
     
