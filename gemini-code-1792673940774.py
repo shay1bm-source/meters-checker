@@ -1,4 +1,5 @@
 import io
+import re
 import xml.etree.ElementTree as ET
 import pandas as pd
 import streamlit as st
@@ -6,9 +7,9 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("ניהול עגלה (כולל קריאת קובץ XML), הצלבה מול בדיקת דיוק ובדיקה פונקציונלית.")
+st.write("סריקת אקדח ברקוד בעגלה, וטעינת קובץ XML אוטומטית לבדיקת הדיוק.")
 
-# פונקציה לחילוץ מונים אוטומטי מקובץ XML
+# פונקציה חכמה לחילוץ מונים מקובץ ה-XML (רק מספרי מונים נקיים)
 def extract_meters_from_xml(uploaded_file):
     try:
         tree = ET.parse(uploaded_file)
@@ -17,19 +18,30 @@ def extract_meters_from_xml(uploaded_file):
         for elem in root.iter():
             if elem.text and elem.text.strip():
                 val = elem.text.strip()
-                if len(val) >= 4:  # סינון בסיסי לאורך אופייני של ברקוד/מונה
-                    extracted.append(val)
+                cleaned_val = re.sub(r'\D', '', val) # משאיר רק ספרות
+                # מונה תקין באורך בין 10 ל-12 ספרות
+                if 10 <= len(cleaned_val) <= 12:
+                    extracted.append(cleaned_val)
+                    
         return list(set(extracted))
     except Exception as e:
         st.error(f"שגיאה בקריאת קובץ ה-XML: {e}")
         return []
 
-# חלוקה ל-3 עמודות בדיוק כמו בבקשה
+# חלוקה ל-3 עמודות
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("🛒 עגלה")
-    uploaded_xml = st.file_uploader("טען קובץ XML לחילוץ ברקודים:", type=["xml"])
+    cart_meters_text = st.text_area(
+        "סרוק ברקודים בעגלה (אקדח ברקוד — אחד בכל שורה):", 
+        height=380, 
+        placeholder="סרוק לכאן עם אקדח הברקוד..."
+    )
+
+with col2:
+    st.subheader("🔍 בדיקת דיוק")
+    uploaded_xml = st.file_uploader("טען קובץ XML לבדיקת דיוק:", type=["xml"])
     
     xml_meters = []
     if uploaded_xml is not None:
@@ -37,21 +49,13 @@ with col1:
         if xml_meters:
             st.success(f"נטענו {len(xml_meters)} מונים מקובץ ה-XML!")
     
-    cart_text_default = "\n".join(xml_meters) if xml_meters else ""
+    accuracy_text_default = "\n".join(xml_meters) if xml_meters else ""
     
-    cart_meters_text = st.text_area(
-        "סרוק ברקודים כאן — ברקוד בכל שורה:", 
-        value=cart_text_default,
-        height=300, 
-        placeholder="סרוק או הדבק ברקודים בעגלה..."
-    )
-
-with col2:
-    st.subheader("🔍 בדיקת דיוק")
     accuracy_meters_text = st.text_area(
-        "הדבק כאן ברקודים מבדיקת הדיוק:", 
-        height=380, 
-        placeholder="הדבק כאן תוצאות בדיקת דיוק..."
+        "ברקודים מבדיקת הדיוק (או הדבק ידנית):", 
+        value=accuracy_text_default,
+        height=300, 
+        placeholder="תוצאות בדיקת דיוק..."
     )
 
 with col3:
@@ -64,7 +68,7 @@ with col3:
 
 st.divider()
 
-# פונקציית ניקוי אחידה (הסרת רווחים ואפסים מובילים להשוואה מדויקת)
+# פונקציית ניקוי אחידה להשוואה מדויקת
 def clean_meter(val):
     cleaned = val.strip()
     return cleaned.lstrip('0') if cleaned else ''
@@ -76,7 +80,7 @@ set_cart = process_text_to_set(cart_meters_text)
 set_accuracy = process_text_to_set(accuracy_meters_text)
 set_functional = process_text_to_set(functional_meters_text)
 
-# הצלבות (אילו מונים בעגלה חסרים בבדיקות)
+# הצלבות
 missing_in_accuracy = sorted(list(set_cart - set_accuracy))
 missing_in_functional = sorted(list(set_cart - set_functional))
 
@@ -106,7 +110,7 @@ with tab1:
             df_func = pd.DataFrame({"ברקוד חסר פונקציונלית": missing_in_functional})
             st.dataframe(df_func, use_container_width=True)
         else:
-            st.success("הכל קיים בבדיקה הפונקציונלית!")
+            st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
     st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
