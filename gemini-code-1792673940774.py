@@ -7,9 +7,9 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("סריקת אקדח ברקוד בעגלה, וטעינת קובץ XML אוטומטית לבדיקת הדיוק עם סינון חכם של מונים אמיתיים בלבד.")
+st.write("סריקת אקדח ברקוד בעגלה, וטעינת קובץ XML אוטומטית לבדיקת הדיוק (עם סינון מדויק של מונים בלבד).")
 
-# פונקציה חכמה לחילוץ מונים מקובץ ה-XML (כולל סינון מספרים שאינם מונים אמיתיים)
+# פונקציה חכמה ומדויקת לחילוץ מונים מקובץ ה-XML (רק מונים שמתחילים ב-050 ובאורך 12 ספרות)
 def extract_meters_from_xml(uploaded_file):
     try:
         tree = ET.parse(uploaded_file)
@@ -20,10 +20,8 @@ def extract_meters_from_xml(uploaded_file):
                 val = elem.text.strip()
                 cleaned_val = re.sub(r'\D', '', val) # משאיר רק ספרות
                 
-                # תנאים לסינון מדויק של מונה אמיתי:
-                # 1. אורך בין 10 ל-14 ספרות.
-                # 2. חייב להתחיל ב-0 או ב-5 (מסנן החוצה מספרים רצים כמו 12345678910).
-                if 10 <= len(cleaned_val) <= 14 and cleaned_val.startswith(('0', '5')):
+                # מונה אמיתי בדיוק באורך 12 ספרות ומתחיל ב-050
+                if len(cleaned_val) == 12 and cleaned_val.startswith('050'):
                     extracted.append(cleaned_val)
                     
         return list(set(extracted))
@@ -31,7 +29,7 @@ def extract_meters_from_xml(uploaded_file):
         st.error(f"שגיאה בקריאת קובץ ה-XML: {e}")
         return []
 
-# חלוקה ל-3 עמודות
+# חלוקה ל-3 עמודות כמבוקש
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -71,7 +69,7 @@ with col3:
 
 st.divider()
 
-# פונקציית ניקוי אחידה להשוואה מדויקת
+# פונקציית ניקוי אחידה להשוואה מדויקת (הסרת רווחים ואפסים מובילים)
 def clean_meter(val):
     cleaned = val.strip()
     return cleaned.lstrip('0') if cleaned else ''
@@ -113,7 +111,7 @@ with tab1:
             df_func = pd.DataFrame({"ברקוד חסר פונקציונלית": missing_in_functional})
             st.dataframe(df_func, use_container_width=True)
         else:
-            st.success("הכל קיים בדיקה הפונקציונלית!")
+            st.success("הכל קיים בבדיקה הפונקציונלית!")
 
 with tab2:
     st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
