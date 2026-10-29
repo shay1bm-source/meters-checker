@@ -40,7 +40,6 @@ def extract_meters_from_excel(uploaded_file):
             for val in col_b:
                 cleaned_val = re.sub(r'\D', '', val)
                 if len(cleaned_val) >= 6:
-                    # לקיחת 6 הספרות האחרונות
                     extracted.append(cleaned_val[-6:])
             return list(set(extracted))
         else:
@@ -122,7 +121,6 @@ def normalize_meter(val):
     cleaned = re.sub(r'\D', '', val)
     if not cleaned:
         return ''
-    # לקיחת 6 הספרות האחרונות
     if len(cleaned) >= 6:
         return cleaned[-6:]
     return cleaned
@@ -153,7 +151,7 @@ with tab1:
     with col_a:
         st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקת דיוק ({len(missing_in_accuracy)}):")
         if missing_in_accuracy:
-            df_acc = pd.DataFrame({"ברקוד חסר בדיוק": missing_in_accuracy})
+            df_acc = pd.DataFrame({"6 ספרות אחרונות חסרות בדיוק": missing_in_accuracy})
             st.dataframe(df_acc, use_container_width=True)
         else:
             st.success("הכל קיים בבדיקת הדיוק!")
@@ -161,7 +159,7 @@ with tab1:
     with col_b:
         st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקה פונקציונלית ({len(missing_in_functional)}):")
         if missing_in_functional:
-            df_func = pd.DataFrame({"ברקוד חסר פונקציונלית": missing_in_functional})
+            df_func = pd.DataFrame({"6 ספרות אחרונות חסרות בפונקציונלית": missing_in_functional})
             st.dataframe(df_func, use_container_width=True)
         else:
             st.success("הכל קיים בדיקה הפונקציונלית!")
@@ -205,4 +203,14 @@ with tab3:
         st.dataframe(df_report, use_container_width=True)
 
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
+        
+        st.download_button(
+            label="📥 הורד דוח מלא לאקסל (Excel)",
+            data=buffer.getvalue(),
+            file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
