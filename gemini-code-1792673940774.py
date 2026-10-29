@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("ניהול עגלה, טעינת קבצי XML לבדיקת דיוק, וטעינת קובץ אקסל לבדיקה פונקציונלית (עם נורמליזציה של 4 ספרות ראשונות).")
+st.write("סריקת אקדח ברקוד בעגלה, טעינת קבצי XML לבדיקת דיוק, וטעינת קובץ אקסל פונקציונלי (השוואה לפי 6 ספרות אחרונות).")
 
 # פונקציה לחילוץ מונים מקובץ XML לבדיקת דיוק
 def extract_meters_from_xml(uploaded_file):
@@ -26,7 +26,7 @@ def extract_meters_from_xml(uploaded_file):
         st.error(f"שגיאה בקריאת הקובץ: {e}")
         return []
 
-# פונקציה לחילוץ ועיבוד מונים מקובץ אקסל לבדיקה פונקציונלית (עמודה B, מתחיל ב-261, חסר 4 ספרות ראשונות)
+# פונקציה לחילוץ מונים מקובץ אקסל לבדיקה פונקציונלית (עמודה B)
 def extract_meters_from_excel(uploaded_file):
     try:
         xls = pd.ExcelFile(uploaded_file)
@@ -39,12 +39,9 @@ def extract_meters_from_excel(uploaded_file):
             extracted = []
             for val in col_b:
                 cleaned_val = re.sub(r'\D', '', val)
-                # סינון מספרים המתחילים ב-261
-                if cleaned_val.startswith('261'):
-                    # הסרת 4 הספרות הראשונות כמבוקש
-                    if len(cleaned_val) > 4:
-                        normalized = cleaned_val[4:]
-                        extracted.append(normalized)
+                if len(cleaned_val) >= 6:
+                    # לקיחת 6 הספרות האחרונות
+                    extracted.append(cleaned_val[-6:])
             return list(set(extracted))
         else:
             st.error("קובץ האקסל חייב להכיל לפחות שתי עמודות (עמודה B).")
@@ -109,7 +106,6 @@ with col3:
         if excel_meters:
             st.success(f"נטענו בהצלחה {len(excel_meters)} מונים מקובץ האקסל!")
             
-    # נרמול (הסרת 4 ספרות ראשונות) גם לטקסט שנדבק ידנית אם קיים
     functional_text_default = "\n".join(excel_meters) if excel_meters else ""
     
     functional_meters_text = st.text_area(
@@ -121,15 +117,15 @@ with col3:
 
 st.divider()
 
-# פונקציית ניקוי ונרמול אחידה (הסרת 4 ספרות ראשונות לצורך השוואה מדויקת)
+# פונקציית נרמול אחידה: חילוץ 6 הספרות האחרונות מכל מספר לצורך השוואה מדויקת
 def normalize_meter(val):
     cleaned = re.sub(r'\D', '', val)
     if not cleaned:
         return ''
-    # הסרת 4 ספרות ראשונות אם אורך הברקוד מתאים (למשל מ-12 ל-8 ספרות או בהתאמה)
-    if len(cleaned) >= 8 and cleaned.startswith(('050', '261')):
-        return cleaned[4:]
-    return cleaned.lstrip('0')
+    # לקיחת 6 הספרות האחרונות
+    if len(cleaned) >= 6:
+        return cleaned[-6:]
+    return cleaned
 
 def process_text_to_set(text_data):
     return {normalize_meter(line) for line in text_data.splitlines() if normalize_meter(line)}
@@ -168,7 +164,7 @@ with tab1:
             df_func = pd.DataFrame({"ברקוד חסר פונקציונלית": missing_in_functional})
             st.dataframe(df_func, use_container_width=True)
         else:
-            st.success("הכל קיים בבדיקה הפונקציונלית!")
+            st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
     st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות)")
@@ -181,6 +177,8 @@ with tab2:
                     "כמות הופעות": all_extracted_meters.count(m),
                     "שמות הקבצים בהם מופיע": ", ".join(files)
                 })
+        
+        duplicates_data.sort(key=lambda x: x["מספר מונה"])
         
         if duplicates_data:
             df_dup = pd.DataFrame(duplicates_data)
@@ -198,7 +196,7 @@ with tab3:
         report_data = []
         for m in all_unique:
             report_data.append({
-                "ברקוד / מונה": m,
+                "6 ספרות אחרונות": m,
                 "נמצא בעגלה": "כן" if m in set_cart else "לא",
                 "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
                 "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא"
@@ -207,14 +205,4 @@ with tab3:
         st.dataframe(df_report, use_container_width=True)
 
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
-        
-        st.download_button(
-            label="📥 הורד דוח מלא לאקסל (Excel)",
-            data=buffer.getvalue(),
-            file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
+        with pd.ExcelWriter(buffer, engine='openpyxl') as
