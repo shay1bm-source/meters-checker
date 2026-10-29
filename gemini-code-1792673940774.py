@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("סריקת אקדח ברקוד בעגלה, טעינת קבצי XML לבדיקת דיוק, וטעינת קובץ אקסל פונקציונלי (השוואה לפי 6 ספרות אחרונות).")
+st.write("ניהול עגלה, בדיקת דיוק (XML או הדבקה), ובדיקה פונקציונלית (אקסל או הדבקה לפי 6 ספרות אחרונות).")
 
 # פונקציה לחילוץ מונים מקובץ XML לבדיקת דיוק
 def extract_meters_from_xml(uploaded_file):
@@ -33,7 +33,6 @@ def extract_meters_from_excel(uploaded_file):
         sheet_name = xls.sheet_names[0]
         df_excel = pd.read_excel(xls, sheet_name=sheet_name)
         
-        # לקיחת עמודה B (אינדקס 1)
         if df_excel.shape[1] > 1:
             col_b = df_excel.iloc[:, 1].astype(str).str.strip()
             extracted = []
@@ -63,8 +62,8 @@ with col1:
 with col2:
     st.subheader("🔍 בדיקת דיוק")
     uploaded_xmls = st.file_uploader(
-        "טען קבצי XML לבדיקת דיוק (בחר את כולם יחד):", 
-        type=["xml"], 
+        "טען קבצי XML לבדיקת דיוק (או הדבק מתחת):", 
+        type=["xml", "txt"], 
         accept_multiple_files=True
     )
     
@@ -83,40 +82,40 @@ with col2:
                     meter_to_files[m].append(file_name)
         
         if all_extracted_meters:
-            st.success(f"נטענו בהצלחה {len(all_extracted_meters)} מופעים מתוך {len(uploaded_xmls)} קבצים!")
+            st.success(f"נטענו {len(all_extracted_meters)} מופעים מתוך {len(uploaded_xmls)} קבצים!")
     
     xml_meters_unique = sorted(list(meter_to_files.keys()))
     accuracy_text_default = "\n".join(xml_meters_unique) if xml_meters_unique else ""
     
     accuracy_meters_text = st.text_area(
-        "ברקודים מבדיקת הדיוק (או הדבק ידנית):", 
+        "תוצאות בדיקת דיוק (הדבק ידנית אם הקבצים נחסמו ברשת):", 
         value=accuracy_text_default,
-        height=300, 
-        placeholder="תוצאות בדיקת דיוק..."
+        height=260, 
+        placeholder="הדבק כאן מונים..."
     )
 
 with col3:
     st.subheader("⚙️ בדיקה פונקציונלית")
-    uploaded_excel = st.file_uploader("טען קובץ אקסל לבדיקה פונקציונלית:", type=["xlsx", "xls"])
+    uploaded_excel = st.file_uploader("טען קובץ אקסל לבדיקה פונקציונלית (או הדבק מתחת):", type=["xlsx", "xls", "txt"])
     
     excel_meters = []
     if uploaded_excel is not None:
         excel_meters = extract_meters_from_excel(uploaded_excel)
         if excel_meters:
-            st.success(f"נטענו בהצלחה {len(excel_meters)} מונים מקובץ האקסל!")
+            st.success(f"נטענו {len(excel_meters)} מונים מקובץ האקסל!")
             
     functional_text_default = "\n".join(excel_meters) if excel_meters else ""
     
     functional_meters_text = st.text_area(
-        "ברקודים מהבדיקה הפונקציונלית (או הדבק ידנית):", 
+        "תוצאות בדיקה פונקציונלית (הדבק ידנית אם הקובץ נחסם ברשת):", 
         value=functional_text_default,
-        height=300, 
-        placeholder="תוצאות בדיקה פונקציונלית..."
+        height=260, 
+        placeholder="הדבק כאן מונים..."
     )
 
 st.divider()
 
-# פונקציית נרמול אחידה: חילוץ 6 הספרות האחרונות מכל מספר לצורך השוואה מדויקת
+# פונקציית נרמול אחידה: חילוץ 6 הספרות האחרונות מכל מספר
 def normalize_meter(val):
     cleaned = re.sub(r'\D', '', val)
     if not cleaned:
@@ -165,52 +164,4 @@ with tab1:
             st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
-    st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות)")
-    if meter_to_files:
-        duplicates_data = []
-        for m, files in meter_to_files.items():
-            if len(files) > 1 or all_extracted_meters.count(m) > 1:
-                duplicates_data.append({
-                    "מספר מונה": m,
-                    "כמות הופעות": all_extracted_meters.count(m),
-                    "שמות הקבצים בהם מופיע": ", ".join(files)
-                })
-        
-        duplicates_data.sort(key=lambda x: x["מספר מונה"])
-        
-        if duplicates_data:
-            df_dup = pd.DataFrame(duplicates_data)
-            st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
-            st.dataframe(df_dup, use_container_width=True)
-        else:
-            st.success("אין כפילויות! כל מונה מופיע בקובץ אחד בלבד.")
-    else:
-        st.info("טען קבצי XML כדי לראות ניתוח כפילויות.")
-
-with tab3:
-    st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
-    if set_cart:
-        all_unique = sorted(list(set_cart | set_accuracy | set_functional))
-        report_data = []
-        for m in all_unique:
-            report_data.append({
-                "6 ספרות אחרונות": m,
-                "נמצא בעגלה": "כן" if m in set_cart else "לא",
-                "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
-                "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא"
-            })
-        df_report = pd.DataFrame(report_data)
-        st.dataframe(df_report, use_container_width=True)
-
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
-        
-        st.download_button(
-            label="📥 הורד דוח מלא לאקסל (Excel)",
-            data=buffer.getvalue(),
-            file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
+    st.subheader("
