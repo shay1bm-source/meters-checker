@@ -196,31 +196,36 @@ def normalize_meter(val):
         return cleaned[-6:]
     return cleaned
 
-def process_text_to_set(text_data):
-    return {normalize_meter(line) for line in text_data.splitlines() if normalize_meter(line)}
-
-# ביצוע הבדיקה וההצגה רק לאחר לחיצה על כפתור "בדיקה"
 if run_check:
     st.session_state['checked'] = True
 
 if st.session_state.get('checked', False):
-    set_cart = process_text_to_set(cart_meters_text)
-    set_accuracy = process_text_to_set(accuracy_meters_text)
-    set_functional = process_text_to_set(functional_meters_text)
+    # איסוף רשימות גולמיות לבדיקת כפילויות בעגלה
+    cart_lines = [line.strip() for line in cart_meters_text.splitlines() if line.strip()]
+    cart_normalized_list = [normalize_meter(line) for line in cart_lines if normalize_meter(line)]
+    
+    set_cart = set(cart_normalized_list)
+    set_accuracy = {normalize_meter(line) for line in accuracy_meters_text.splitlines() if normalize_meter(line)}
+    set_functional = {normalize_meter(line) for line in functional_meters_text.splitlines() if normalize_meter(line)}
 
     # הצלבות
     missing_in_accuracy = sorted(list(set_cart - set_accuracy))
     missing_in_functional = sorted(list(set_cart - set_functional))
+    checked_in_functional = sorted(list(set_cart & set_functional))
+
+    # איתור כפילויות בעגלה
+    cart_counts = {m: cart_normalized_list.count(m) for m in set_cart}
+    cart_duplicates = {m: count for m, count in cart_counts.items() if count > 1}
 
     st.subheader("📋 סיכום ותוצאות הצלבה")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("סה״כ בעגלה", len(set_cart))
-    m2.metric("בבדיקת דיוק", len(set_accuracy))
+    m1.metric("סה״כ בעגלה (יחודי)", len(set_cart))
+    m2.metric("נבדקו פונקציונלית", len(checked_in_functional))
     m3.metric("חסרים בדיוק", len(missing_in_accuracy))
     m4.metric("חסרים בפונקציונלית", len(missing_in_functional))
 
-    tab1, tab2, tab3 = st.tabs(["❌ מונים חסרים", "🔍 איתור כפילויות", "📊 דוח מלא להורדה"])
+    tab1, tab2, tab3, tab4 = st.tabs(["❌ מונים חסרים", "⚙️ נבדקו פונקציונלית", "🔍 איתור כפילויות (עגלה ו-XML)", "📊 דוח מלא להורדה"])
 
     with tab1:
         col_a, col_b = st.columns(2)
@@ -238,10 +243,29 @@ if st.session_state.get('checked', False):
                 df_func = pd.DataFrame({"6 ספרות אחרונות חסרות בפונקציונלית": missing_in_functional})
                 st.dataframe(df_func, use_container_width=True)
             else:
-                st.success("הכל קיים בדיקה הפונקציונלית!")
+                st.success("הכל קיים בבדיקה הפונקציונלית!")
 
     with tab2:
-        st.subheader("🔍 מונים שמופיעים ביותר מקובץ אחד (כפילויות)")
+        st.subheader(f"✅ מונים בעגלה שעברו בדיקה פונקציונלית בהצלחה ({len(checked_in_functional)}):")
+        if checked_in_functional:
+            df_checked_func = pd.DataFrame({"6 ספרות אחרונות שנבדקו פונקציונלית": checked_in_functional})
+            st.dataframe(df_checked_func, use_container_width=True)
+        else:
+            st.info("אין מונים בעגלה שעברו בדיקה פונקציונלית.")
+
+    with tab3:
+        st.subheader("🔍 כפילויות בעגלה")
+        if cart_duplicates:
+            dup_cart_data = [{"6 ספרות אחרונות": m, "כמות הופעות בעגלה": cnt} for m, cnt in cart_duplicates.items()]
+            df_dup_cart = pd.DataFrame(dup_cart_data)
+            st.warning(f"נמצאו {len(cart_duplicates)} מונים שמופיעים יותר מפעם אחת בעגלה:")
+            st.dataframe(df_dup_cart, use_container_width=True)
+        else:
+            st.success("אין כפילויות בעגלה! כל מונה מופיע פעם אחת בלבד.")
+
+        st.divider()
+
+        st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות דיוק)")
         if meter_to_files:
             duplicates_data = []
             for m, files in meter_to_files.items():
@@ -256,14 +280,14 @@ if st.session_state.get('checked', False):
             
             if duplicates_data:
                 df_dup = pd.DataFrame(duplicates_data)
-                st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
+                st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ XML אחד:")
                 st.dataframe(df_dup, use_container_width=True)
             else:
-                st.success("אין כפילויות! כל מונה מופיע בקובץ אחד בלבד.")
+                st.success("אין כפילויות בקבצי הדיוק!")
         else:
-            st.info("טען קבצים כדי לראות ניתוח כפילויות.")
+            st.info("טען קבצי דיוק כדי לראות ניתוח כפילויות.")
 
-    with tab3:
+    with tab4:
         st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
         if set_cart:
             all_unique = sorted(list(set_cart | set_accuracy | set_functional))
