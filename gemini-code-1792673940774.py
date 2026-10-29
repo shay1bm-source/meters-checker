@@ -1,19 +1,26 @@
 import io
 import re
+import zipfile
 import xml.etree.ElementTree as ET
 import pandas as pd
 import streamlit as st
 
+# ניסיון ייבוא ספריית קריאת PDF אם קיימת בסביבה
+try:
+    import pypdf
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+
 st.set_page_config(page_title="מערכת בדיקת מונים וברקודים", page_icon="📊", layout="wide")
 
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
-st.write("ניהול עגלה, בדיקת דיוק (XML או הדבקה), ובדיקה פונקציונלית (אקסל או הדבקה לפי 6 ספרות אחרונות).")
+st.write("ניהול עגלה, בדיקת דיוק (XML, PDF, ZIP או הדבקה), ובדיקה פונקציונלית (אקסל, ZIP או הדבקה לפי 6 ספרות אחרונות).")
 
-# פונקציה לחילוץ מונים מקובץ XML לבדיקת דיוק
-def extract_meters_from_xml(uploaded_file):
+# פונקציה לחילוץ מונים מקובץ XML
+def extract_meters_from_xml_content(xml_content):
     try:
-        tree = ET.parse(uploaded_file)
-        root = tree.getroot()
+        root = ET.fromstring(xml_content)
         extracted = []
         for elem in root.iter():
             if elem.text and elem.text.strip():
@@ -23,7 +30,25 @@ def extract_meters_from_xml(uploaded_file):
                     extracted.append(cleaned_val)
         return extracted
     except Exception as e:
-        st.error(f"שגיאה בקריאת הקובץ: {e}")
+        return []
+
+# פונקציה לחילוץ מונים מקובץ PDF (דוח בדיקה)
+def extract_meters_from_pdf(uploaded_file):
+    if not PDF_SUPPORT:
+        st.error("ספריית pypdf אינה מותקנת לקריאת קבצי PDF.")
+        return []
+    try:
+        reader = pypdf.PdfReader(uploaded_file)
+        extracted = []
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                # חיפוש כל מספר באורך 12 ספרות שמתחיל ב-050 בכל עמוד הדוח
+                found = re.findall(r'\b050\d{9}\b', page_text)
+                extracted.extend(found)
+        return list(set(extracted))
+    except Exception as e:
+        st.error(f"שגיאה בקריאת קובץ ה-PDF: {e}")
         return []
 
 # פונקציה לחילוץ מונים מקובץ אקסל לבדיקה פונקציונלית (עמודה B)
@@ -61,61 +86,113 @@ with col1:
 
 with col2:
     st.subheader("🔍 בדיקת דיוק")
-    uploaded_xmls = st.file_uploader(
-        "טען קבצי XML לבדיקת דיוק (או הדבק מתחת):", 
-        type=["xml", "txt"], 
+    uploaded_accuracy = st.file_uploader(
+        "טען קבצי XML, PDF, ZIP או טקסט:", 
+        type=["xml", "pdf", "zip", "txt"], 
         accept_multiple_files=True
     )
     
     meter_to_files = {}
     all_extracted_meters = []
 
-    if uploaded_xmls:
-        for uploaded_file in uploaded_xmls:
+    if uploaded_accuracy:
+        for uploaded_file in uploaded_accuracy:
             file_name = uploaded_file.name
-            meters_from_file = extract_meters_from_xml(uploaded_file)
-            for m in meters_from_file:
-                all_extracted_meters.append(m)
-                if m not in meter_to_files:
-                    meter_to_files[m] = []
-                if file_name not in meter_to_files[m]:
-                    meter_to_files[m].append(file_name)
-        
+            
+            # קובץ ZIP
+            if file_name.endswith('.zip'):
+                try:
+                    with zipfile.ZipFile(uploaded_file, 'r') as z:
+                        for zip_info in z.namelist():
+                            if zip_info.endswith('.xml'):
+                                with z.open(zip_info) as xml_file:
+                                    meters_from_file = extract_meters_from_xml_content(xml_file.read())
+                                    for m in meters_from_file:
+                                        all_extracted_meters.append(m)
+                                        if m not in meter_to_files:
+                                            meter_to_files[m] = []
+                                        if zip_info not in meter_to_files[m]:
+                                            meter_to_files[m].append(zip_info)
+                            elif zip_info.endswith('.pdf') and PDF_SUPPORT:
+                                with z.open(zip_info) as pdf_file:
+                                    meters_from_file = extract_meters_from_pdf(pdf_file)
+                                    for m in meters_from_file:
+                                        all_extracted_meters.append(m)
+                                        if m not in meter_to_files:
+                                            meter_to_files[m] = []
+                                        if zip_info not in meter_to_files[m]:
+                                            meter_to_files[m].append(zip_info)
+                except Exception as e:
+                    st.error(f"שגיאה בחילוץ קובץ ה-ZIP: {e}")
+            
+            # קובץ XML בודד
+            elif file_name.endswith('.xml'):
+                meters_from_file = extract_meters_from_xml_content(uploaded_file.read())
+                for m in meters_from_file:
+                    all_extracted_meters.append(m)
+                    if m not in meter_to_files:
+                        meter_to_files[m] = []
+                    if file_name not in meter_to_files[m]:
+                        meter_to_files[m].append(file_name)
+            
+            # קובץ PDF בודד
+            elif file_name.endswith('.pdf'):
+                meters_from_file = extract_meters_from_pdf(uploaded_file)
+                for m in meters_from_file:
+                    all_extracted_meters.append(m)
+                    if m not in meter_to_files:
+                        meter_to_files[m] = []
+                    if file_name not in meter_to_files[m]:
+                        meter_to_files[m].append(file_name)
+
         if all_extracted_meters:
-            st.success(f"נטענו {len(all_extracted_meters)} מופעים מתוך {len(uploaded_xmls)} קבצים!")
-    
+            st.success(f"נטענו בהצלחה {len(all_extracted_meters)} מופעים!")
+
     xml_meters_unique = sorted(list(meter_to_files.keys()))
     accuracy_text_default = "\n".join(xml_meters_unique) if xml_meters_unique else ""
     
     accuracy_meters_text = st.text_area(
-        "תוצאות בדיקת דיוק (הדבק ידנית אם הקבצים נחסמו ברשת):", 
+        "תוצאות בדיקת דיוק (או הדבק ידנית):", 
         value=accuracy_text_default,
         height=260, 
-        placeholder="הדבק כאן מונים..."
+        placeholder="מונים לבדיקת דיוק..."
     )
 
 with col3:
     st.subheader("⚙️ בדיקה פונקציונלית")
-    uploaded_excel = st.file_uploader("טען קובץ אקסל לבדיקה פונקציונלית (או הדבק מתחת):", type=["xlsx", "xls", "txt"])
+    uploaded_excel = st.file_uploader("טען קובץ אקסל או ZIP פונקציונלי:", type=["xlsx", "xls", "zip", "txt"])
     
     excel_meters = []
     if uploaded_excel is not None:
-        excel_meters = extract_meters_from_excel(uploaded_excel)
+        if uploaded_excel.name.endswith('.zip'):
+            try:
+                with zipfile.ZipFile(uploaded_excel, 'r') as z:
+                    for zip_info in z.namelist():
+                        if zip_info.endswith(('.xlsx', '.xls')):
+                            with z.open(zip_info) as excel_file:
+                                meters_from_file = extract_meters_from_excel(excel_file)
+                                excel_meters.extend(meters_from_file)
+                excel_meters = list(set(excel_meters))
+            except Exception as e:
+                st.error(f"שגיאה בחילוץ קובץ ה-ZIP הפונקציונלי: {e}")
+        elif uploaded_excel.name.endswith(('.xlsx', '.xls')):
+            excel_meters = extract_meters_from_excel(uploaded_excel)
+            
         if excel_meters:
-            st.success(f"נטענו בהצלחה {len(excel_meters)} מונים מקובץ האקסל!")
+            st.success(f"נטענו בהצלחה {len(excel_meters)} מונים!")
             
     functional_text_default = "\n".join(excel_meters) if excel_meters else ""
     
     functional_meters_text = st.text_area(
-        "תוצאות בדיקה פונקציונלית (הדבק ידנית אם הקובץ נחסם ברשת):", 
+        "תוצאות בדיקה פונקציונלית (או הדבק ידנית):", 
         value=functional_text_default,
         height=260, 
-        placeholder="הדבק כאן מונים..."
+        placeholder="מונים לבדיקה פונקציונלית..."
     )
 
 st.divider()
 
-# פונקציית נרמול אחידה: חילוץ 6 הספרות האחרונות מכל מספר
+# פונקציית נרמול אחידה לפי 6 ספרות אחרונות
 def normalize_meter(val):
     cleaned = re.sub(r'\D', '', val)
     if not cleaned:
@@ -143,7 +220,7 @@ m2.metric("בבדיקת דיוק", len(set_accuracy))
 m3.metric("חסרים בדיוק", len(missing_in_accuracy))
 m4.metric("חסרים בפונקציונלית", len(missing_in_functional))
 
-tab1, tab2, tab3 = st.tabs(["❌ מונים חסרים", "🔍 איתור כפילויות בין קבצים", "📊 דוח מלא להורדה"])
+tab1, tab2, tab3 = st.tabs(["❌ מונים חסרים", "🔍 איתור כפילויות", "📊 דוח מלא להורדה"])
 
 with tab1:
     col_a, col_b = st.columns(2)
@@ -164,52 +241,10 @@ with tab1:
             st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
-    st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות)")
+    st.subheader("🔍 מונים שמופיעים ביותר מקובץ אחד (כפילויות)")
     if meter_to_files:
         duplicates_data = []
         for m, files in meter_to_files.items():
             if len(files) > 1 or all_extracted_meters.count(m) > 1:
                 duplicates_data.append({
-                    "מספר מונה": m,
-                    "כמות הופעות": all_extracted_meters.count(m),
-                    "שמות הקבצים בהם מופיע": ", ".join(files)
-                })
-        
-        duplicates_data.sort(key=lambda x: x["מספר מונה"])
-        
-        if duplicates_data:
-            df_dup = pd.DataFrame(duplicates_data)
-            st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
-            st.dataframe(df_dup, use_container_width=True)
-        else:
-            st.success("אין כפילויות! כל מונה מופיע בקובץ אחד בלבד.")
-    else:
-        st.info("טען קבצי XML כדי לראות ניתוח כפילויות.")
-
-with tab3:
-    st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
-    if set_cart:
-        all_unique = sorted(list(set_cart | set_accuracy | set_functional))
-        report_data = []
-        for m in all_unique:
-            report_data.append({
-                "6 ספרות אחרונות": m,
-                "נמצא בעגלה": "כן" if m in set_cart else "לא",
-                "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
-                "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא"
-            })
-        df_report = pd.DataFrame(report_data)
-        st.dataframe(df_report, use_container_width=True)
-
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
-        
-        st.download_button(
-            label="📥 הורד דוח מלא לאקסל (Excel)",
-            data=buffer.getvalue(),
-            file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
+                    "מספר מונה
