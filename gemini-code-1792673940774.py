@@ -102,7 +102,7 @@ with col3:
     if uploaded_excel is not None:
         excel_meters = extract_meters_from_excel(uploaded_excel)
         if excel_meters:
-            st.success(f"נטענו {len(excel_meters)} מונים מקובץ האקסל!")
+            st.success(f"נטענו בהצלחה {len(excel_meters)} מונים מקובץ האקסל!")
             
     functional_text_default = "\n".join(excel_meters) if excel_meters else ""
     
@@ -164,4 +164,52 @@ with tab1:
             st.success("הכל קיים בדיקה הפונקציונלית!")
 
 with tab2:
-    st.subheader("
+    st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות)")
+    if meter_to_files:
+        duplicates_data = []
+        for m, files in meter_to_files.items():
+            if len(files) > 1 or all_extracted_meters.count(m) > 1:
+                duplicates_data.append({
+                    "מספר מונה": m,
+                    "כמות הופעות": all_extracted_meters.count(m),
+                    "שמות הקבצים בהם מופיע": ", ".join(files)
+                })
+        
+        duplicates_data.sort(key=lambda x: x["מספר מונה"])
+        
+        if duplicates_data:
+            df_dup = pd.DataFrame(duplicates_data)
+            st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
+            st.dataframe(df_dup, use_container_width=True)
+        else:
+            st.success("אין כפילויות! כל מונה מופיע בקובץ אחד בלבד.")
+    else:
+        st.info("טען קבצי XML כדי לראות ניתוח כפילויות.")
+
+with tab3:
+    st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
+    if set_cart:
+        all_unique = sorted(list(set_cart | set_accuracy | set_functional))
+        report_data = []
+        for m in all_unique:
+            report_data.append({
+                "6 ספרות אחרונות": m,
+                "נמצא בעגלה": "כן" if m in set_cart else "לא",
+                "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
+                "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא"
+            })
+        df_report = pd.DataFrame(report_data)
+        st.dataframe(df_report, use_container_width=True)
+
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
+        
+        st.download_button(
+            label="📥 הורד דוח מלא לאקסל (Excel)",
+            data=buffer.getvalue(),
+            file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
