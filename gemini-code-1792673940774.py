@@ -35,7 +35,6 @@ def extract_meters_from_xml_content(xml_content):
 # פונקציה לחילוץ מונים מקובץ PDF (דוח בדיקה)
 def extract_meters_from_pdf(uploaded_file):
     if not PDF_SUPPORT:
-        st.error("ספריית pypdf אינה מותקנת לקריאת קבצי PDF.")
         return []
     try:
         reader = pypdf.PdfReader(uploaded_file)
@@ -43,12 +42,10 @@ def extract_meters_from_pdf(uploaded_file):
         for page in reader.pages:
             page_text = page.extract_text()
             if page_text:
-                # חיפוש כל מספר באורך 12 ספרות שמתחיל ב-050 בכל עמוד הדוח
                 found = re.findall(r'\b050\d{9}\b', page_text)
                 extracted.extend(found)
         return list(set(extracted))
     except Exception as e:
-        st.error(f"שגיאה בקריאת קובץ ה-PDF: {e}")
         return []
 
 # פונקציה לחילוץ מונים מקובץ אקסל לבדיקה פונקציונלית (עמודה B)
@@ -67,10 +64,8 @@ def extract_meters_from_excel(uploaded_file):
                     extracted.append(cleaned_val[-6:])
             return list(set(extracted))
         else:
-            st.error("קובץ האקסל חייב להכיל לפחות שתי עמודות (עמודה B).")
             return []
     except Exception as e:
-        st.error(f"שגיאה בקריאת קובץ האקסל: {e}")
         return []
 
 # חלוקה ל-3 עמודות
@@ -192,59 +187,4 @@ with col3:
 
 st.divider()
 
-# פונקציית נרמול אחידה לפי 6 ספרות אחרונות
-def normalize_meter(val):
-    cleaned = re.sub(r'\D', '', val)
-    if not cleaned:
-        return ''
-    if len(cleaned) >= 6:
-        return cleaned[-6:]
-    return cleaned
-
-def process_text_to_set(text_data):
-    return {normalize_meter(line) for line in text_data.splitlines() if normalize_meter(line)}
-
-set_cart = process_text_to_set(cart_meters_text)
-set_accuracy = process_text_to_set(accuracy_meters_text)
-set_functional = process_text_to_set(functional_meters_text)
-
-# הצלבות
-missing_in_accuracy = sorted(list(set_cart - set_accuracy))
-missing_in_functional = sorted(list(set_cart - set_functional))
-
-st.subheader("📋 סיכום ותוצאות הצלבה")
-
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("סה״כ בעגלה", len(set_cart))
-m2.metric("בבדיקת דיוק", len(set_accuracy))
-m3.metric("חסרים בדיוק", len(missing_in_accuracy))
-m4.metric("חסרים בפונקציונלית", len(missing_in_functional))
-
-tab1, tab2, tab3 = st.tabs(["❌ מונים חסרים", "🔍 איתור כפילויות", "📊 דוח מלא להורדה"])
-
-with tab1:
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקת דיוק ({len(missing_in_accuracy)}):")
-        if missing_in_accuracy:
-            df_acc = pd.DataFrame({"6 ספרות אחרונות חסרות בדיוק": missing_in_accuracy})
-            st.dataframe(df_acc, use_container_width=True)
-        else:
-            st.success("הכל קיים בבדיקת הדיוק!")
-
-    with col_b:
-        st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקה פונקציונלית ({len(missing_in_functional)}):")
-        if missing_in_functional:
-            df_func = pd.DataFrame({"6 ספרות אחרונות חסרות בפונקציונלית": missing_in_functional})
-            st.dataframe(df_func, use_container_width=True)
-        else:
-            st.success("הכל קיים בדיקה הפונקציונלית!")
-
-with tab2:
-    st.subheader("🔍 מונים שמופיעים ביותר מקובץ אחד (כפילויות)")
-    if meter_to_files:
-        duplicates_data = []
-        for m, files in meter_to_files.items():
-            if len(files) > 1 or all_extracted_meters.count(m) > 1:
-                duplicates_data.append({
-                    "מספר מונה
+#
