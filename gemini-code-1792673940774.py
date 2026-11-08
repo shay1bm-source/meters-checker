@@ -5,7 +5,6 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import streamlit as st
 
-# ניסיון ייבוא ספריית קריאת PDF אם קיימת בסביבה
 try:
     import pypdf
     PDF_SUPPORT = True
@@ -17,7 +16,7 @@ st.set_page_config(page_title="מערכת בדיקת מונים וברקודים
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
 st.write("ניהול עגלה, בדיקת דיוק (XML, PDF, ZIP או הדבקה), ובדיקה פונקציונלית (אקסל, ZIP או הדבקה לפי 6 ספרות אחרונות).")
 
-# פונקציה משופרת לחילוץ מונים מקובץ XML (תומכת בכל המבנים)
+# פונקציה משופרת לחילוץ מונים מקובץ XML (מתמודדת עם אפסים מובילים ומאתרת 050)
 def extract_meters_from_xml_content(xml_content):
     try:
         root = ET.fromstring(xml_content)
@@ -26,9 +25,15 @@ def extract_meters_from_xml_content(xml_content):
             if elem.text and elem.text.strip():
                 val = elem.text.strip()
                 cleaned_val = re.sub(r'\D', '', val)
-                # זיהוי כל מספר שמתחיל ב-050 ובאורך מתאים
-                if cleaned_val.startswith('050') and len(cleaned_val) >= 10:
-                    extracted.append(cleaned_val)
+                # חיפוש רצף המכיל 050 באורך מתאים (מתעלם מאפסים מובילים)
+                if '050' in cleaned_val and len(cleaned_val) >= 10:
+                    # חילוץ החלק הרלוונטי מהמופע
+                    match = re.search(r'(050\d{9})', cleaned_val)
+                    if match:
+                        extracted.append(match.group(1))
+                    else:
+                        # גיבוי: אם האורך שונה אבל מכיל 050
+                        extracted.append(cleaned_val.lstrip('0'))
         return list(set(extracted))
     except Exception as e:
         return []
@@ -185,10 +190,8 @@ with col3:
 
 st.divider()
 
-# כפתור בדיקה ראשי
 run_check = st.button("🔍 בדיקה", type="primary", use_container_width=True)
 
-# פונקציית נרמול אחידה לפי 6 ספרות אחרונות
 def normalize_meter(val):
     cleaned = re.sub(r'\D', '', val)
     if not cleaned:
@@ -208,12 +211,10 @@ if st.session_state.get('checked', False):
     set_accuracy = {normalize_meter(line) for line in accuracy_meters_text.splitlines() if normalize_meter(line)}
     set_functional = {normalize_meter(line) for line in functional_meters_text.splitlines() if normalize_meter(line)}
 
-    # הצלבות
     missing_in_accuracy = sorted(list(set_cart - set_accuracy))
     missing_in_functional = sorted(list(set_cart - set_functional))
     checked_in_functional = sorted(list(set_cart & set_functional))
 
-    # איתור כפילויות בעגלה
     cart_counts = {m: cart_normalized_list.count(m) for m in set_cart}
     cart_duplicates = {m: count for m, count in cart_counts.items() if count > 1}
 
@@ -232,87 +233,4 @@ if st.session_state.get('checked', False):
         with col_a:
             st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקת דיוק ({len(missing_in_accuracy)}):")
             if missing_in_accuracy:
-                df_acc = pd.DataFrame({"6 ספרות אחרונות חסרות בדיוק": missing_in_accuracy})
-                st.dataframe(df_acc, use_container_width=True)
-            else:
-                st.success("הכל קיים בבדיקת הדיוק!")
-
-        with col_b:
-            st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקה פונקציונלית ({len(missing_in_functional)}):")
-            if missing_in_functional:
-                df_func = pd.DataFrame({"6 ספרות אחרונות חסרות בפונקציונלית": missing_in_functional})
-                st.dataframe(df_func, use_container_width=True)
-            else:
-                st.success("הכל קיים בדיקה הפונקציונלית!")
-
-    with tab2:
-        st.subheader(f"✅ מונים בעגלה שעברו בדיקה פונקציונלית בהצלחה ({len(checked_in_functional)}):")
-        if checked_in_functional:
-            df_checked_func = pd.DataFrame({"6 ספרות אחרונות שנבדקו פונקציונלית": checked_in_functional})
-            st.dataframe(df_checked_func, use_container_width=True)
-        else:
-            st.info("אין מונים בעגלה שעברו בדיקה פונקציונלית.")
-
-    with tab3:
-        st.subheader("🔍 כפילויות בעגלה")
-        if cart_duplicates:
-            dup_cart_data = [{"6 ספרות אחרונות": m, "כמות הופעות בעגלה": cnt} for m, cnt in cart_duplicates.items()]
-            df_dup_cart = pd.DataFrame(dup_cart_data)
-            st.warning(f"נמצאו {len(cart_duplicates)} מונים שמופיעים יותר מפעם אחת בעגלה:")
-            st.dataframe(df_dup_cart, use_container_width=True)
-        else:
-            st.success("אין כפילויות בעגלה! כל מונה מופיע פעם אחת בלבד.")
-
-        st.divider()
-
-        st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות דיוק)")
-        if meter_to_files:
-            duplicates_data = []
-            for m, files in meter_to_files.items():
-                if len(files) > 1 or all_extracted_meters.count(m) > 1:
-                    duplicates_data.append({
-                        "מספר מונה": m,
-                        "כמות הופעות": all_extracted_meters.count(m),
-                        "שמות הקבצים בהם מופיע": ", ".join(files)
-                    })
-            
-            duplicates_data.sort(key=lambda x: x["מספר מונה"])
-            
-            if duplicates_data:
-                df_dup = pd.DataFrame(duplicates_data)
-                st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ XML אחד:")
-                st.dataframe(df_dup, use_container_width=True)
-            else:
-                st.success("אין כפילויות בקבצי הדיוק!")
-        else:
-            st.info("טען קבצי דיוק כדי לראות ניתוח כפילויות.")
-
-    with tab4:
-        st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
-        if set_cart:
-            all_unique = sorted(list(set_cart | set_accuracy | set_functional))
-            report_data = []
-            for m in all_unique:
-                report_data.append({
-                    "6 ספרות אחרונות": m,
-                    "נמצא בעגלה": "כן" if m in set_cart else "לא",
-                    "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
-                    "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא"
-                })
-            df_report = pd.DataFrame(report_data)
-            st.dataframe(df_report, use_container_width=True)
-
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_report.to_excel(writer, index=False, sheet_name='דוח מרוכז')
-            
-            st.download_button(
-                label="📥 הורד דוח מלא לאקסל (Excel)",
-                data=buffer.getvalue(),
-                file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.info("הכנס נתונים בעגלה כדי להפיק דוח.")
-else:
-    st.info("לחץ על כפתור **'בדיקה'** האדום למעלה כדי להציג את תוצאות ההצלבה והדוחות.")
+                df_acc = pd.DataFrame({"6 ספרות אחרונות חסרות בדיוק": missing_in
