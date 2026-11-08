@@ -16,6 +16,7 @@ st.set_page_config(page_title="מערכת בדיקת מונים וברקודים
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
 st.write("ניהול עגלה, בדיקת דיוק (XML, PDF, ZIP או טקסט), ובדיקה פונקציונלית (אקסל, ZIP או הדבקה לפי 6 ספרות אחרונות).")
 
+# פונקציה לחילוץ מונים מקובץ XML
 def extract_meters_from_xml_content(xml_content):
     try:
         root = ET.fromstring(xml_content)
@@ -35,6 +36,7 @@ def extract_meters_from_xml_content(xml_content):
     except Exception as e:
         return []
 
+# פונקציה לחילוץ מונים מקובץ PDF
 def extract_meters_from_pdf(uploaded_file):
     if not PDF_SUPPORT:
         return []
@@ -50,25 +52,46 @@ def extract_meters_from_pdf(uploaded_file):
     except Exception as e:
         return []
 
+# פונקציה מעודכנת וחכמה לחילוץ מונים מקובץ אקסל (מזהה עמודות מונים ומחלצת גם 8+ ספרות)
 def extract_meters_from_excel(uploaded_file):
     try:
         xls = pd.ExcelFile(uploaded_file)
         sheet_name = xls.sheet_names[0]
-        df_excel = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+        df_excel = pd.read_excel(xls, sheet_name=sheet_name)
         
         extracted = []
-        for col_idx in range(df_excel.shape[1]):
-            col_data = df_excel.iloc[:, col_idx].astype(str).str.strip()
+        
+        # חיפוש עמודה ששמה מכיל MeTTerNum או Meter
+        meter_col_name = None
+        for col in df_excel.columns:
+            col_str = str(col).lower()
+            if 'metternum' in col_str or 'meter' in col_str or 'kodmone' in col_str:
+                meter_col_name = col
+                break
+                
+        if meter_col_name is not None:
+            col_data = df_excel[meter_col_name].astype(str).str.strip()
             for val in col_data:
                 if val and val.lower() != 'nan':
                     cleaned_val = re.sub(r'\D', '', val)
                     if len(cleaned_val) >= 6:
-                        last_six = cleaned_val[-6:]
-                        extracted.append(last_six)
+                        extracted.append(cleaned_val[-6:])
+        else:
+            # אם לא נמצאה עמודה ספציפית, נסרוק את כל העמודות בקובץ
+            df_all = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+            for col_idx in range(df_all.shape[1]):
+                col_data = df_all.iloc[:, col_idx].astype(str).str.strip()
+                for val in col_data:
+                    if val and val.lower() != 'nan':
+                        cleaned_val = re.sub(r'\D', '', val)
+                        if len(cleaned_val) >= 6:
+                            extracted.append(cleaned_val[-6:])
+                            
         return list(set(extracted))
     except Exception as e:
         return []
 
+# חלוקה ל-2 עמודות
 col1, col2 = st.columns(2)
 
 with col1:
@@ -234,7 +257,7 @@ if st.session_state.get('checked', False):
                 df_func = pd.DataFrame({"6 ספרות אחרונות חסרות בפונקציונלית": missing_in_functional})
                 st.dataframe(df_func, use_container_width=True)
             else:
-                st.success("הכל קיים בדיקה הפונקציונלית!")
+                st.success("הכל קיים בבדיקה הפונקציונלית!")
 
     with tab2:
         st.subheader(f"✅ מונים בעגלה שעברו בדיקה פונקציונלית בהצלחה ({len(checked_in_functional)}):")
@@ -256,7 +279,7 @@ if st.session_state.get('checked', False):
 
         st.divider()
 
-        st.subheader("🔍 מונים שמופיעים ביותר מקובץ XML אחד (כפילויות דיוק)")
+        st.subheader("🔍 מונים שמופיעים ביותר מקובץ אקסל או XML אחד")
         if meter_to_files:
             duplicates_data = []
             for m, files in meter_to_files.items():
@@ -271,12 +294,12 @@ if st.session_state.get('checked', False):
             
             if duplicates_data:
                 df_dup = pd.DataFrame(duplicates_data)
-                st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ XML אחד:")
+                st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
                 st.dataframe(df_dup, use_container_width=True)
             else:
-                st.success("אין כפילויות בקבצי הדיוק!")
+                st.success("אין כפילויות!")
         else:
-            st.info("טען קבצי דיוק כדי לראות ניתוח כפילויות.")
+            st.info("טען קבצים כדי לראות ניתוח כפילויות.")
 
     with tab4:
         st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
