@@ -25,14 +25,11 @@ def extract_meters_from_xml_content(xml_content):
             if elem.text and elem.text.strip():
                 val = elem.text.strip()
                 cleaned_val = re.sub(r'\D', '', val)
-                # חיפוש רצף המכיל 050 באורך מתאים (מתעלם מאפסים מובילים)
                 if '050' in cleaned_val and len(cleaned_val) >= 10:
-                    # חילוץ החלק הרלוונטי מהמופע
                     match = re.search(r'(050\d{9})', cleaned_val)
                     if match:
                         extracted.append(match.group(1))
                     else:
-                        # גיבוי: אם האורך שונה אבל מכיל 050
                         extracted.append(cleaned_val.lstrip('0'))
         return list(set(extracted))
     except Exception as e:
@@ -196,41 +193,4 @@ def normalize_meter(val):
     cleaned = re.sub(r'\D', '', val)
     if not cleaned:
         return ''
-    if len(cleaned) >= 6:
-        return cleaned[-6:]
-    return cleaned
-
-if run_check:
-    st.session_state['checked'] = True
-
-if st.session_state.get('checked', False):
-    cart_lines = [line.strip() for line in cart_meters_text.splitlines() if line.strip()]
-    cart_normalized_list = [normalize_meter(line) for line in cart_lines if normalize_meter(line)]
-    
-    set_cart = set(cart_normalized_list)
-    set_accuracy = {normalize_meter(line) for line in accuracy_meters_text.splitlines() if normalize_meter(line)}
-    set_functional = {normalize_meter(line) for line in functional_meters_text.splitlines() if normalize_meter(line)}
-
-    missing_in_accuracy = sorted(list(set_cart - set_accuracy))
-    missing_in_functional = sorted(list(set_cart - set_functional))
-    checked_in_functional = sorted(list(set_cart & set_functional))
-
-    cart_counts = {m: cart_normalized_list.count(m) for m in set_cart}
-    cart_duplicates = {m: count for m, count in cart_counts.items() if count > 1}
-
-    st.subheader("📋 סיכום ותוצאות הצלבה")
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("סה״כ בעגלה (יחודי)", len(set_cart))
-    m2.metric("נבדקו פונקציונלית", len(checked_in_functional))
-    m3.metric("חסרים בדיוק", len(missing_in_accuracy))
-    m4.metric("חסרים בפונקציונלית", len(missing_in_functional))
-
-    tab1, tab2, tab3, tab4 = st.tabs(["❌ מונים חסרים", "⚙️ נבדקו פונקציונלית", "🔍 איתור כפילויות (עגלה ו-XML)", "📊 דוח מלא להורדה"])
-
-    with tab1:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.error(f"מונים בעגלה ש**לא נמצאו** בבדיקת דיוק ({len(missing_in_accuracy)}):")
-            if missing_in_accuracy:
-                df_acc = pd.DataFrame({"6 ספרות אחרונות חסרות בדיוק": missing_in
+    if len
