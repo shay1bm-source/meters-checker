@@ -17,7 +17,7 @@ st.set_page_config(page_title="מערכת בדיקת מונים וברקודים
 st.title("📊 מערכת ניהול ובדיקת מונים וברקודים")
 st.write("ניהול עגלה, בדיקת דיוק (XML, PDF, ZIP או הדבקה), ובדיקה פונקציונלית (אקסל, ZIP או הדבקה לפי 6 ספרות אחרונות).")
 
-# פונקציה לחילוץ מונים מקובץ XML
+# פונקציה משופרת לחילוץ מונים מקובץ XML (תומכת בכל המבנים)
 def extract_meters_from_xml_content(xml_content):
     try:
         root = ET.fromstring(xml_content)
@@ -26,9 +26,10 @@ def extract_meters_from_xml_content(xml_content):
             if elem.text and elem.text.strip():
                 val = elem.text.strip()
                 cleaned_val = re.sub(r'\D', '', val)
-                if len(cleaned_val) == 12 and cleaned_val.startswith('050'):
+                # זיהוי כל מספר שמתחיל ב-050 ובאורך מתאים
+                if cleaned_val.startswith('050') and len(cleaned_val) >= 10:
                     extracted.append(cleaned_val)
-        return extracted
+        return list(set(extracted))
     except Exception as e:
         return []
 
@@ -200,7 +201,6 @@ if run_check:
     st.session_state['checked'] = True
 
 if st.session_state.get('checked', False):
-    # איסוף רשימות גולמיות לבדיקת כפילויות בעגלה
     cart_lines = [line.strip() for line in cart_meters_text.splitlines() if line.strip()]
     cart_normalized_list = [normalize_meter(line) for line in cart_lines if normalize_meter(line)]
     
@@ -243,7 +243,7 @@ if st.session_state.get('checked', False):
                 df_func = pd.DataFrame({"6 ספרות אחרונות חסרות בפונקציונלית": missing_in_functional})
                 st.dataframe(df_func, use_container_width=True)
             else:
-                st.success("הכל קיים בבדיקה הפונקציונלית!")
+                st.success("הכל קיים בדיקה הפונקציונלית!")
 
     with tab2:
         st.subheader(f"✅ מונים בעגלה שעברו בדיקה פונקציונלית בהצלחה ({len(checked_in_functional)}):")
