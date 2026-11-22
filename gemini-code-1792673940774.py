@@ -391,4 +391,96 @@ if st.session_state.get("checked", False):
         with col_c:
             st.warning(f"בפונקציונלי (אותה סדרה) אבל **חסרים בעגלה** ({len(missing_from_cart_in_series)}):")
             if missing_from_cart_in_series:
-                st.dataframe(pd.DataFrame({"6 ספרות אחרונות": missing_from_cart_in_series}),
+                st.dataframe(
+                    pd.DataFrame({"6 ספרות אחרונות": missing_from_cart_in_series}),
+                    use_container_width=True,
+                )
+            else:
+                st.success("אין מונים חסרים מהסדרה של העגלה!")
+
+    with tab2:
+        st.subheader(f"✅ מונים בעגלה שעברו בדיקה פונקציונלית בהצלחה ({len(checked_in_functional)}):")
+        if checked_in_functional:
+            st.dataframe(
+                pd.DataFrame({"6 ספרות אחרונות שנבדקו פונקציונלית": checked_in_functional}),
+                use_container_width=True,
+            )
+        else:
+            st.info("אין מונים בעגלה שעברו בדיקה פונקציונלית.")
+
+    with tab3:
+        st.subheader("🔍 כפילויות בעגלה")
+        if cart_duplicates:
+            dup_cart_data = [
+                {"6 ספרות אחרונות": m, "כמות הופעות בעגלה": cnt}
+                for m, cnt in cart_duplicates.items()
+            ]
+            st.warning(f"נמצאו {len(cart_duplicates)} מונים שמופיעים יותר מפעם אחת בעגלה:")
+            st.dataframe(pd.DataFrame(dup_cart_data), use_container_width=True)
+        else:
+            st.success("אין כפילויות בעגלה! כל מונה מופיע פעם אחת בלבד.")
+
+        st.divider()
+
+        st.subheader("🔍 מונים שמופיעים ביותר מקובץ אקסל או XML אחד")
+        if meter_to_files:
+            duplicates_data = []
+            for m, files in meter_to_files.items():
+                if len(files) > 1 or all_extracted_meters.count(m) > 1:
+                    duplicates_data.append({
+                        "מספר מונה": m,
+                        "כמות הופעות": all_extracted_meters.count(m),
+                        "שמות הקבצים בהם מופיע": ", ".join(files),
+                    })
+            duplicates_data.sort(key=lambda x: x["מספר מונה"])
+            if duplicates_data:
+                st.warning(f"נמצאו {len(duplicates_data)} מונים המופיעים ביותר מקובץ אחד:")
+                st.dataframe(pd.DataFrame(duplicates_data), use_container_width=True)
+            else:
+                st.success("אין כפילויות!")
+        else:
+            st.info("טען קבצים כדי לראות ניתוח כפילויות.")
+
+        st.divider()
+
+        st.subheader(f"📦 מונים נוספים בפונקציונלי מסדרות אחרות ({len(other_series_in_func)})")
+        if other_series_in_func:
+            st.dataframe(
+                pd.DataFrame({"6 ספרות אחרונות (סדרות אחרות)": other_series_in_func}),
+                use_container_width=True,
+            )
+        else:
+            st.info("אין מונים נוספים מסדרות אחרות.")
+
+    with tab4:
+        st.write("הפקת דוח ריכוז, חוסרים והשוואות לאקסל:")
+        if set_cart or set_functional or set_accuracy:
+            all_unique = sorted(list(set_cart | set_accuracy | set_functional))
+            report_data = []
+            for m in all_unique:
+                report_data.append({
+                    "6 ספרות אחרונות": m,
+                    "נמצא בעגלה": "כן" if m in set_cart else "לא",
+                    "עבר בדיקת דיוק": "כן" if m in set_accuracy else "לא",
+                    "עבר בדיקה פונקציונלית": "כן" if m in set_functional else "לא",
+                    "חסר בעגלה (מסדרת העגלה)": "כן" if m in missing_from_cart_in_series else "לא",
+                })
+            df_report = pd.DataFrame(report_data)
+            st.dataframe(df_report, use_container_width=True)
+
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                df_report.to_excel(writer, index=False, sheet_name="דוח מרוכז")
+
+            st.download_button(
+                label="📥 הורד דוח מלא לאקסל (Excel)",
+                data=buffer.getvalue(),
+                file_name="דוח_בדיקת_מונים_מרוכז.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        else:
+            st.info("הכנס נתונים כדי להפיק דוח.")
+else:
+    st.info(
+        "לחץ על כפתור **'הפעל בדיקה והצלבה'** האדום למעלה כדי להציג את תוצאות ההצלבה והדוחות."
+    )
